@@ -1,14 +1,33 @@
-import pygame, sys, time
+import pygame, sys, random
 from pygame.locals import *
+
+def doRectsOverlap(rect1, rect2):
+    for a, b in [(rect1, rect2), (rect2, rect1)]:
+        # Check if a's corners are inside b
+        if ((isPointInsideRect(a.left, a.top, b)) or
+            (isPointInsideRect(a.left, a.bottom, b)) or
+            (isPointInsideRect(a.right, a.top, b)) or
+            (isPointInsideRect(a.right, a.bottom, b))):
+            return True
+
+    return False
+
+def isPointInsideRect(x, y, rect):
+    if (x > rect.left) and (x < rect.right) and (y > rect.top) and (y < rect.bottom):
+        return True
+    else:
+        return False
+
 
 # set up pygame
 pygame.init()
+mainClock = pygame.time.Clock()
 
 # set up the window
 WINDOWWIDTH = 400
 WINDOWHEIGHT = 400
 windowSurface = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT), 0, 32)
-pygame.display.set_caption('Animation')
+pygame.display.set_caption('Collision Detection')
 
 # set up direction variables
 DOWNLEFT = 1
@@ -20,15 +39,17 @@ MOVESPEED = 4
 
 # set up the colors
 BLACK = (0, 0, 0)
-RED = (255, 0, 0)
 GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
+WHITE = (255, 255, 255)
 
-# set up the block data structure
-b1 = {'rect':pygame.Rect(300, 80, 50, 100), 'color':RED, 'dir':UPRIGHT}
-b2 = {'rect':pygame.Rect(200, 200, 20, 20), 'color':GREEN, 'dir':UPLEFT}
-b3 = {'rect':pygame.Rect(100, 150, 60, 60), 'color':BLUE, 'dir':DOWNLEFT}
-blocks = [b1, b2, b3]
+# set up the bouncer and food data structures
+foodCounter = 0
+NEWFOOD = 40
+FOODSIZE = 20
+bouncer = {'rect':pygame.Rect(300, 100, 50, 50), 'dir':UPLEFT}
+foods = []
+for i in range(20):
+    foods.append(pygame.Rect(random.randint(0, WINDOWWIDTH - FOODSIZE), random.randint(0, WINDOWHEIGHT - FOODSIZE), FOODSIZE, FOODSIZE))
 
 # run the game loop
 while True:
@@ -38,53 +59,67 @@ while True:
             pygame.quit()
             sys.exit()
 
+    foodCounter += 1
+    if foodCounter >= NEWFOOD:
+        # add new food
+        foodCounter = 0
+        foods.append(pygame.Rect(random.randint(0, WINDOWWIDTH - FOODSIZE), random.randint(0, WINDOWHEIGHT - FOODSIZE), FOODSIZE, FOODSIZE))
+
     # draw the black background onto the surface
     windowSurface.fill(BLACK)
 
-    for b in blocks:
-        # move the block data structure
-        if b['dir'] == DOWNLEFT:
-            b['rect'].left -= MOVESPEED
-            b['rect'].top += MOVESPEED
-        if b['dir'] == DOWNRIGHT:
-            b['rect'].left += MOVESPEED
-            b['rect'].top += MOVESPEED
-        if b['dir'] == UPLEFT:
-            b['rect'].left -= MOVESPEED
-            b['rect'].top -= MOVESPEED
-        if b['dir'] == UPRIGHT:
-            b['rect'].left += MOVESPEED
-            b['rect'].top -= MOVESPEED
+    # move the bouncer data structure
+    if bouncer['dir'] == DOWNLEFT:
+        bouncer['rect'].left -= MOVESPEED
+        bouncer['rect'].top += MOVESPEED
+    if bouncer['dir'] == DOWNRIGHT:
+        bouncer['rect'].left += MOVESPEED
+        bouncer['rect'].top += MOVESPEED
+    if bouncer['dir'] == UPLEFT:
+        bouncer['rect'].left -= MOVESPEED
+        bouncer['rect'].top -= MOVESPEED
+    if bouncer['dir'] == UPRIGHT:
+        bouncer['rect'].left += MOVESPEED
+        bouncer['rect'].top -= MOVESPEED
 
-        # check if the block has moved out of the window
-        if b['rect'].top < 0:
-            # block has moved past the top
-            if b['dir'] == UPLEFT:
-                b['dir'] = DOWNLEFT
-            if b['dir'] == UPRIGHT:
-                b['dir'] = DOWNRIGHT
-        if b['rect'].bottom > WINDOWHEIGHT:
-            # block has moved past the bottom
-            if b['dir'] == DOWNLEFT:
-                b['dir'] = UPLEFT
-            if b['dir'] == DOWNRIGHT:
-                b['dir'] = UPRIGHT
-        if b['rect'].left < 0:
-            # block has moved past the left side
-            if b['dir'] == DOWNLEFT:
-                b['dir'] = DOWNRIGHT
-            if b['dir'] == UPLEFT:
-                b['dir'] = UPRIGHT
-        if b['rect'].right > WINDOWWIDTH:
-            # block has moved past the right side
-            if b['dir'] == DOWNRIGHT:
-                b['dir'] = DOWNLEFT
-            if b['dir'] == UPRIGHT:
-                b['dir'] = UPLEFT
+    # check if the bouncer has move out of the window
+    if bouncer['rect'].top < 0:
+        # bouncer has moved past the top
+        if bouncer['dir'] == UPLEFT:
+            bouncer['dir'] = DOWNLEFT
+        if bouncer['dir'] == UPRIGHT:
+            bouncer['dir'] = DOWNRIGHT
+    if bouncer['rect'].bottom > WINDOWHEIGHT:
+        # bouncer has moved past the bottom
+        if bouncer['dir'] == DOWNLEFT:
+            bouncer['dir'] = UPLEFT
+        if bouncer['dir'] == DOWNRIGHT:
+            bouncer['dir'] = UPRIGHT
+    if bouncer['rect'].left < 0:
+        # bouncer has moved past the left side
+        if bouncer['dir'] == DOWNLEFT:
+            bouncer['dir'] = DOWNRIGHT
+        if bouncer['dir'] == UPLEFT:
+            bouncer['dir'] = UPRIGHT
+    if bouncer['rect'].right > WINDOWWIDTH:
+        # bouncer has moved past the right side
+        if bouncer['dir'] == DOWNRIGHT:
+            bouncer['dir'] = DOWNLEFT
+        if bouncer['dir'] == UPRIGHT:
+            bouncer['dir'] = UPLEFT
 
-        # draw the block onto the surface
-        pygame.draw.rect(windowSurface, b['color'], b['rect'])
+    # draw the bouncer onto the surface
+    pygame.draw.rect(windowSurface, WHITE, bouncer['rect'])
+
+    # check if the bouncer has intersected with any food squares.
+    for food in foods[:]:
+        if doRectsOverlap(bouncer['rect'], food):
+            foods.remove(food)
+
+    # draw the food
+    for i in range(len(foods)):
+        pygame.draw.rect(windowSurface, GREEN, foods[i])
 
     # draw the window onto the screen
     pygame.display.update()
-    time.sleep(0.02)
+    mainClock.tick(40)
