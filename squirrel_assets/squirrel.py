@@ -4,10 +4,15 @@ import random, sys, time, math, pygame
 from pygame.locals import *
 
 FPS = 30 # frames per second to update the screen
-WINWIDTH = 640 # width of the program's window, in pixels
+WINWIDTH = 680 # width of the program's window, in pixels
 WINHEIGHT = 480 # height in pixels
 HALF_WINWIDTH = int(WINWIDTH / 2)
 HALF_WINHEIGHT = int(WINHEIGHT / 2)
+
+#adding sound
+pygame.mixer.pre_init(44100, -16, 2, 2048)
+pygame.mixer.init()
+oh = pygame.mixer.Sound('Wilhelm_Scream.ogg')
 
 GRASSCOLOR = (24, 255, 0)
 WHITE = (255, 255, 255)
@@ -17,17 +22,17 @@ CAMERASLACK = 90     # how far from the center the squirrel moves before moving 
 MOVERATE = 9         # how fast the player moves
 BOUNCERATE = 6       # how fast the player bounces (large is slower)
 BOUNCEHEIGHT = 30    # how high the player bounces
-STARTSIZE = 25       # how big the player starts off
+STARTSIZE = 40       # how big the player starts off
 WINSIZE = 300        # how big the player needs to be to win
 INVULNTIME = 2       # how long the player is invulnerable after being hit in seconds
 GAMEOVERTIME = 4     # how long the "game over" text stays on the screen in seconds
-MAXHEALTH = 3        # how much health the player starts with
+MAXHEALTH = 5        # how much health the player starts with
 
-NUMGRASS = 80        # number of grass objects in the active area
+NUMGRASS = 500        # number of grass objects in the active area
 NUMSQUIRRELS = 30    # number of squirrels in the active area
 SQUIRRELMINSPEED = 3 # slowest squirrel speed
-SQUIRRELMAXSPEED = 7 # fastest squirrel speed
-DIRCHANGEFREQ = 2    # % chance of direction change per frame
+SQUIRRELMAXSPEED = 20 # fastest squirrel speed
+DIRCHANGEFREQ = 5    # % chance of direction change per frame
 LEFT = 'left'
 RIGHT = 'right'
 
@@ -58,18 +63,20 @@ Grass data structure keys:
 """
 
 def main():
-    global FPSCLOCK, DISPLAYSURF, BASICFONT, L_SQUIR_IMG, R_SQUIR_IMG, GRASSIMAGES
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, L_SQUIR_IMG, R_SQUIR_IMG, L_YETI_IMG, R_YETI_IMG, GRASSIMAGES
 
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
     pygame.display.set_icon(pygame.image.load('gameicon.png'))
     DISPLAYSURF = pygame.display.set_mode((WINWIDTH, WINHEIGHT))
-    pygame.display.set_caption('Squirrel Eat Squirrel')
+    pygame.display.set_caption('Drake Eat Drake')
     BASICFONT = pygame.font.Font('freesansbold.ttf', 32)
 
     # load the image files
-    L_SQUIR_IMG = pygame.image.load('squirrel.png')
+    L_SQUIR_IMG = pygame.image.load('drake.png')
     R_SQUIR_IMG = pygame.transform.flip(L_SQUIR_IMG, True, False)
+    L_YETI_IMG = pygame.image.load('yeti.png')
+    R_YETI_IMG = pygame.transform.flip(L_YETI_IMG, True, False)
     GRASSIMAGES = []
     for i in range(1, 5):
         GRASSIMAGES.append(pygame.image.load('grass%s.png' % i))
@@ -77,6 +84,88 @@ def main():
     while True:
         runGame()
 
+
+        
+def drawHealthMeter(currentHealth):
+    for i in range(currentHealth): # draw red health bars
+        pygame.draw.rect(DISPLAYSURF, RED,   (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10))
+    for i in range(MAXHEALTH): # draw the white outlines
+        pygame.draw.rect(DISPLAYSURF, WHITE, (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10), 1)
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+def getBounceAmount(currentBounce, bounceRate, bounceHeight):
+    # Returns the number of pixels to offset based on the bounce.
+    # Larger bounceRate means a slower bounce.
+    # Larger bounceHeight means a higher bounce.
+    # currentBounce will always be less than bounceRate
+    return int(math.sin( (math.pi / float(bounceRate)) * currentBounce ) * bounceHeight)
+
+def getRandomVelocity():
+    speed = random.randint(SQUIRRELMINSPEED, SQUIRRELMAXSPEED)
+    if random.randint(0, 1) == 0:
+        return speed
+    else:
+        return -speed
+
+
+def getRandomOffCameraPos(camerax, cameray, objWidth, objHeight):
+    # create a Rect of the camera view
+    cameraRect = pygame.Rect(camerax, cameray, WINWIDTH, WINHEIGHT)
+    while True:
+        x = random.randint(camerax - WINWIDTH, camerax + (2 * WINWIDTH))
+        y = random.randint(cameray - WINHEIGHT, cameray + (2 * WINHEIGHT))
+        # create a Rect object with the random coordinates and use colliderect()
+        # to make sure the right edge isn't in the camera view.
+        objRect = pygame.Rect(x, y, objWidth, objHeight)
+        if not objRect.colliderect(cameraRect):
+            return x, y
+
+
+def makeNewSquirrel(camerax, cameray):
+    sq = {}
+    generalSize = random.randint(10, 35)
+    multiplier = random.randint(1, 3)
+    sq['width']  = (generalSize + random.randint(0, 10)) * multiplier
+    sq['height'] = (generalSize + random.randint(0, 10)) * multiplier
+    sq['x'], sq['y'] = getRandomOffCameraPos(camerax, cameray, sq['width'], sq['height'])
+    sq['movex'] = getRandomVelocity()
+    sq['movey'] = getRandomVelocity()
+    if sq['movex'] < 0: # squirrel is facing left
+        sq['surface'] = pygame.transform.scale(L_YETI_IMG, (sq['width'], sq['height']))
+    else: # squirrel is facing right
+        sq['surface'] = pygame.transform.scale(R_YETI_IMG, (sq['width'], sq['height']))
+    sq['bounce'] = 0
+    sq['bouncerate'] = random.randint(20, 36)
+    sq['bounceheight'] = random.randint(20, 100)
+    #sq['bouncerate'] = random.randint(10, 18)
+    #sq['bounceheight'] = random.randint(10, 50)
+    print (sq)
+    return sq
+
+
+def makeNewGrass(camerax, cameray):
+    gr = {}
+    gr['grassImage'] = random.randint(0, len(GRASSIMAGES) - 1)
+    gr['width']  = GRASSIMAGES[0].get_width()
+    gr['height'] = GRASSIMAGES[0].get_height()
+    gr['x'], gr['y'] = getRandomOffCameraPos(camerax, cameray, gr['width'], gr['height'])
+    gr['rect'] = pygame.Rect( (gr['x'], gr['y'], gr['width'], gr['height']) )
+    return gr
+
+
+def isOutsideActiveArea(camerax, cameray, obj):
+    # Return False if camerax and cameray are more than
+    # a half-window length beyond the edge of the window.
+    boundsLeftEdge = camerax - WINWIDTH
+    boundsTopEdge = cameray - WINHEIGHT
+    boundsRect = pygame.Rect(boundsLeftEdge, boundsTopEdge, WINWIDTH * 3, WINHEIGHT * 3)
+    objRect = pygame.Rect(obj['x'], obj['y'], obj['width'], obj['height'])
+    return not boundsRect.colliderect(objRect)
 
 def runGame():
     # set up variables for the start of a new game
@@ -91,7 +180,7 @@ def runGame():
     gameOverRect = gameOverSurf.get_rect()
     gameOverRect.center = (HALF_WINWIDTH, HALF_WINHEIGHT)
 
-    winSurf = BASICFONT.render('You have achieved OMEGA SQUIRREL!', True, WHITE)
+    winSurf = BASICFONT.render('You have achieved OMEGA Drake!', True, WHITE)
     winRect = winSurf.get_rect()
     winRect.center = (HALF_WINWIDTH, HALF_WINHEIGHT)
 
@@ -139,7 +228,7 @@ def runGame():
             if sObj['bounce'] > sObj['bouncerate']:
                 sObj['bounce'] = 0 # reset bounce amount
 
-            # random chance they change direction
+            # random chance they (the enemies) change direction
             if random.randint(0, 99) < DIRCHANGEFREQ:
                 sObj['movex'] = getRandomVelocity()
                 sObj['movey'] = getRandomVelocity()
@@ -267,6 +356,8 @@ def runGame():
                 playerObj['bounce'] = 0 # reset bounce amount
 
             # check if the player has collided with any squirrels
+            print (len(squirrelObjs))
+            
             for i in range(len(squirrelObjs)-1, -1, -1):
                 sqObj = squirrelObjs[i]
                 if 'rect' in sqObj and playerObj['rect'].colliderect(sqObj['rect']):
@@ -286,6 +377,7 @@ def runGame():
                             winMode = True # turn on "win mode"
 
                     elif not invulnerableMode:
+                        oh.play()
                         # player is smaller and takes damage
                         invulnerableMode = True
                         invulnerableStartTime = time.time()
@@ -310,83 +402,6 @@ def runGame():
 
 
 
-def drawHealthMeter(currentHealth):
-    for i in range(currentHealth): # draw red health bars
-        pygame.draw.rect(DISPLAYSURF, RED,   (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10))
-    for i in range(MAXHEALTH): # draw the white outlines
-        pygame.draw.rect(DISPLAYSURF, WHITE, (15, 5 + (10 * MAXHEALTH) - i * 10, 20, 10), 1)
-
-
-def terminate():
-    pygame.quit()
-    sys.exit()
-
-
-def getBounceAmount(currentBounce, bounceRate, bounceHeight):
-    # Returns the number of pixels to offset based on the bounce.
-    # Larger bounceRate means a slower bounce.
-    # Larger bounceHeight means a higher bounce.
-    # currentBounce will always be less than bounceRate
-    return int(math.sin( (math.pi / float(bounceRate)) * currentBounce ) * bounceHeight)
-
-def getRandomVelocity():
-    speed = random.randint(SQUIRRELMINSPEED, SQUIRRELMAXSPEED)
-    if random.randint(0, 1) == 0:
-        return speed
-    else:
-        return -speed
-
-
-def getRandomOffCameraPos(camerax, cameray, objWidth, objHeight):
-    # create a Rect of the camera view
-    cameraRect = pygame.Rect(camerax, cameray, WINWIDTH, WINHEIGHT)
-    while True:
-        x = random.randint(camerax - WINWIDTH, camerax + (2 * WINWIDTH))
-        y = random.randint(cameray - WINHEIGHT, cameray + (2 * WINHEIGHT))
-        # create a Rect object with the random coordinates and use colliderect()
-        # to make sure the right edge isn't in the camera view.
-        objRect = pygame.Rect(x, y, objWidth, objHeight)
-        if not objRect.colliderect(cameraRect):
-            return x, y
-
-
-def makeNewSquirrel(camerax, cameray):
-    sq = {}
-    generalSize = random.randint(5, 25)
-    multiplier = random.randint(1, 3)
-    sq['width']  = (generalSize + random.randint(0, 10)) * multiplier
-    sq['height'] = (generalSize + random.randint(0, 10)) * multiplier
-    sq['x'], sq['y'] = getRandomOffCameraPos(camerax, cameray, sq['width'], sq['height'])
-    sq['movex'] = getRandomVelocity()
-    sq['movey'] = getRandomVelocity()
-    if sq['movex'] < 0: # squirrel is facing left
-        sq['surface'] = pygame.transform.scale(L_SQUIR_IMG, (sq['width'], sq['height']))
-    else: # squirrel is facing right
-        sq['surface'] = pygame.transform.scale(R_SQUIR_IMG, (sq['width'], sq['height']))
-    sq['bounce'] = 0
-    sq['bouncerate'] = random.randint(10, 18)
-    sq['bounceheight'] = random.randint(10, 50)
-    return sq
-
-
-def makeNewGrass(camerax, cameray):
-    gr = {}
-    gr['grassImage'] = random.randint(0, len(GRASSIMAGES) - 1)
-    gr['width']  = GRASSIMAGES[0].get_width()
-    gr['height'] = GRASSIMAGES[0].get_height()
-    gr['x'], gr['y'] = getRandomOffCameraPos(camerax, cameray, gr['width'], gr['height'])
-    gr['rect'] = pygame.Rect( (gr['x'], gr['y'], gr['width'], gr['height']) )
-    return gr
-
-
-def isOutsideActiveArea(camerax, cameray, obj):
-    # Return False if camerax and cameray are more than
-    # a half-window length beyond the edge of the window.
-    boundsLeftEdge = camerax - WINWIDTH
-    boundsTopEdge = cameray - WINHEIGHT
-    boundsRect = pygame.Rect(boundsLeftEdge, boundsTopEdge, WINWIDTH * 3, WINHEIGHT * 3)
-    objRect = pygame.Rect(obj['x'], obj['y'], obj['width'], obj['height'])
-    return not boundsRect.colliderect(objRect)
 
 
 if __name__ == '__main__':
